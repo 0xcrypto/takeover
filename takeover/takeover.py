@@ -12,6 +12,7 @@ class takeover:
     def __init__(self, configuration):
         self.inform = Webhook.from_url(configuration['discord_webhook'], adapter=RequestsWebhookAdapter())
         self.fingerprints = configuration['fingerprints']
+        self.discord_user_id = configuration['user_id'] if('user_id' in configuration) else ""
 
     async def subDomainTakeOver(self, domain, cname, fingerprint):
         for rdata in cname:
@@ -23,7 +24,7 @@ class takeover:
                         print("[+] %s matched for domain %s" % (fingerprint['service'], domain))
                         self.inform.send("""
                             Hey%s,\n%s is %s to subdomain takeover on %s. Fingerprint is `%s`
-                        """ % ('<@' + config['user_id'] + '>' if(config['user_id']) else "", website, fingerprint['status'].lower().strip(), fingerprint['service'], fingerprint['fingerprint']))
+                        """ % (('<@' + self.discord_user_id + '>') if self.discord_user_id else "", website, fingerprint['status'].lower().strip(), fingerprint['service'], fingerprint['fingerprint']))
   
     async def checkHosts(self, args=[]):
         recheck = []
@@ -64,7 +65,7 @@ class takeover:
             exit(1)
 
 
-if __name__ == '__main__':
+def main():
     try:
         config = json.load(open(home + "/.config/takeover/config.json"))
         config['fingerprints'] = json.load(open(home + "/.config/takeover/fingerprints.json"))
@@ -106,3 +107,7 @@ if __name__ == '__main__':
             exit(1)
 
     asyncio.run(takeover(config).checkHosts())
+
+
+if __name__ == '__main__':
+    main()
