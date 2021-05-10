@@ -5,7 +5,7 @@ This small script tries to detect subdomain takeovers from a list of domains. Fi
 ## Installation
 
 ```
-pip install takeover
+pip install takeover.py
 ```
 
 ## Usage

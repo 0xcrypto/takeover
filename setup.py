@@ -6,7 +6,7 @@ def read(fname):
 
 setup(
     name = "takeover.py",
-    version = "0.0.1",
+    version = "0.0.2",
     author = "Vikrant Singh Chauhan",
     author_email = "vi@hackberry.xyz",
     description = ("This small script tries to detect subdomain takeovers from a list of domains. Fingerprints are taken from https://github.com/EdOverflow/can-i-take-over-xyz."),
@@ -14,7 +14,7 @@ setup(
     keywords = "subdomain takeover",
     url = "http://github.com/0xcrypto/takeover",
     packages=['takeover'],
-    long_description=read('README.md'),
+    long_description=read('README.rst'),
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
         "Topic :: Security",

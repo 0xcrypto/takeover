@@ -10,7 +10,7 @@ home = str(Path.home())
 
 class takeover:
     def __init__(self, configuration):
-        self.inform = Webhook.from_url(configuration['discord_webhook'], adapter=RequestsWebhookAdapter())
+        self.inform = Webhook.from_url(configuration['discord_webhook'], adapter=RequestsWebhookAdapter()) if configuration['discord_webhook'] else False
         self.fingerprints = configuration['fingerprints']
         self.discord_user_id = configuration['user_id'] if('user_id' in configuration) else ""
 
@@ -22,9 +22,10 @@ class takeover:
                     request = requests.get(website)
                     if(fingerprint['fingerprint'] in request.text):
                         print("[+] %s matched for domain %s" % (fingerprint['service'], domain))
-                        self.inform.send("""
-                            Hey%s,\n%s is %s to subdomain takeover on %s. Fingerprint is `%s`
-                        """ % (('<@' + self.discord_user_id + '>') if self.discord_user_id else "", website, fingerprint['status'].lower().strip(), fingerprint['service'], fingerprint['fingerprint']))
+                        if(self.inform):
+                            self.inform.send("""
+                                Hey%s,\n%s is %s to subdomain takeover on %s. Fingerprint is `%s`
+                            """ % (('<@' + self.discord_user_id + '>') if self.discord_user_id else "", website, fingerprint['status'].lower().strip(), fingerprint['service'], fingerprint['fingerprint']))
   
     async def checkHosts(self, args=[]):
         recheck = []
