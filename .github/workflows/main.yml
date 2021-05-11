@@ -1,5 +1,5 @@
 name: Publish PyPI Package
-on: [push]
+on: [create]
 jobs:
   Publish-PyPI-Package:
     runs-on: ubuntu-latest
