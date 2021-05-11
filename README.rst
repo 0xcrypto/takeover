@@ -76,5 +76,5 @@ of who dies with the guns.
 *Legally speaking, What you do with this has nothing to do with me. I am
 not responsible for your actions.*
 
-.. |Twitter| image:: https://img.shields.io/twitter/url?style=social
+.. |Twitter| image:: https://img.shields.io/twitter/url?style=social&url=https%3A%2F%2Fgithub.com%2F0xcrypto%2Ftakeover
    :target: https://twitter.com/intent/tweet?text=Wow:&url=https%3A%2F%2Fgithub.com%2F0xcrypto%2Ftakeover
