@@ -12,6 +12,7 @@ jobs:
           build: python setup.py sdist bdist_wheel
           check: twine check dist/*
           # only upload if a tag is pushed (otherwise just build & check)
-          upload: twine upload dist/*
+          upload: ${{ github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags') }}
+          url: https://test.pypi.org/legacy/
 
 
