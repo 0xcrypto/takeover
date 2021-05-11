@@ -45,7 +45,7 @@ class takeover:
         if(self.discord and len(self.messages)):
             message = "Hey %s, Subdomain takeovers here:\n```%s```" % (
                 ('<@' + self.discord_user_id + '>') if self.discord_user_id else "",
-                "\n".join([lambda message: ": ".join(message) for message in self.messages])
+                "\n".join([": ".join(message) for message in self.messages])
             )
             self.messages = []
             self.discord.send(message)
@@ -83,7 +83,7 @@ class takeover:
                 except NoNameservers:
                     print("[x] DNS No No nameservers: %s" % validdomain)
                 except Timeout:
-                    recheck.append(validdomain)
+                    # self.recheck.append(validdomain)
                     print("[x] DNS Timeout: %s"  % validdomain)
                 except NoAnswer:
                     print("[x] DNS No Answer for CNAME: %s"  % validdomain)
@@ -92,8 +92,8 @@ class takeover:
 
             [thread.join() for thread in self.allthreads]
 
-            if(len(self.recheck)):
-                await self.checkHosts(self.recheck)
+            # if(len(self.recheck)):
+            #     await self.checkHosts(self.recheck)
 
         except IndexError:
             print("[x] No argument provided!")
