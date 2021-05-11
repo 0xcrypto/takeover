@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import asyncio, requests, sys, os, dns.resolver, json
+import asyncio, requests, sys, os, dns.resolver, json, threading, time
 from discord import Webhook, RequestsWebhookAdapter
 from urllib.parse import urlparse
 from dns.resolver import Resolver, NXDOMAIN, NoNameservers, Timeout, NoAnswer
@@ -10,25 +10,47 @@ home = str(Path.home())
 
 class takeover:
     def __init__(self, configuration):
-        self.inform = Webhook.from_url(configuration['discord_webhook'], adapter=RequestsWebhookAdapter()) if configuration['discord_webhook'] else False
+        self.discord = Webhook.from_url(configuration['discord_webhook'], adapter=RequestsWebhookAdapter()) if configuration['discord_webhook'] else False
         self.fingerprints = configuration['fingerprints']
         self.discord_user_id = configuration['user_id'] if('user_id' in configuration) else ""
+        self.totalthreads = 0
+        self.allthreads = []
+        self.messages = []
 
-    async def subDomainTakeOver(self, domain, cname, fingerprint):
-        for rdata in cname:
+    def subDomainTakeOver(self, domain, cnames, fingerprint):
+        for rdata in cnames:
             for cname in fingerprint['cname']:
                 if(cname and cname in str(rdata.target)):
                     website = 'http://' + domain
-                    request = requests.get(website)
+                    print("[.] Sending HTTP Request: %s" % domain)
+                    try:
+                        request = requests.get(website)
+                    except requests.exceptions.ConnectionError:
+                        print("[x] Connection Failed: %s" % domain)
+                        self.recheck.append(domain)
+                        return 
                     if(fingerprint['fingerprint'] in request.text):
                         print("[+] %s matched for domain %s" % (fingerprint['service'], domain))
-                        if(self.inform):
-                            self.inform.send("""
-                                Hey%s,\n%s is %s to subdomain takeover on %s. Fingerprint is `%s`
-                            """ % (('<@' + self.discord_user_id + '>') if self.discord_user_id else "", website, fingerprint['status'].lower().strip(), fingerprint['service'], fingerprint['fingerprint']))
-  
+                        self.messages.append("""
+                            Hey%s,\n%s is %s to subdomain takeover on %s. Fingerprint is `%s`
+                        """ % (('<@' + self.discord_user_id + '>') if self.discord_user_id else "", website, fingerprint['status'].lower().strip(), fingerprint['service'], fingerprint['fingerprint']))
+        self.totalthreads -= 1
+
+    def inform(self):
+        if(self.discord):
+            while True:
+                try:
+                    message = self.messages.pop()
+                    self.discord.send(message)
+                except:
+                    continue
+
+
     async def checkHosts(self, args=[]):
-        recheck = []
+        self.recheck = []
+        notificationThread = threading.Thread(target=self.inform)
+        notificationThread.start()
+
         try:
             if(not len(args)):
                 args = sys.argv
@@ -38,12 +60,19 @@ class takeover:
                 args = list(set(sys.stdin))
 
             for domain in args:
+                while self.totalthreads > 80:
+                    print("[!] Threads exceeding: %s Threads" % self.totalthreads)
+                    time.sleep(1)
+
                 validdomain = domain
                 if not(domain.startswith('http://') or domain.startswith('https://')):
                     validdomain = (urlparse('http://' + domain).netloc).strip()
                 try:
                     cname = dns.resolver.query(validdomain, 'CNAME')
-                    [await self.subDomainTakeOver(validdomain, cname, fingerprint) for fingerprint in self.fingerprints]
+                    threads = [threading.Thread(target=self.subDomainTakeOver, args=(validdomain, cname, fingerprint)) for fingerprint in self.fingerprints]
+                    [thread.start() for thread in threads]
+                    self.allthreads.append(threads)
+                    self.totalthreads += len(threads)
 
                 except NoNameservers:
                     print("[x] DNS No No nameservers: %s" % validdomain)
@@ -55,14 +84,18 @@ class takeover:
                 except NXDOMAIN:
                     print("[x] DNS NXDOMAIN: %s"  % validdomain)
 
-            if(len(recheck)):
-                await self.checkHosts(recheck)
+            [thread.join() for thread in totalthreads]
+
+            if(len(self.recheck)):
+                await self.checkHosts(self.recheck)
 
         except IndexError:
             print("[x] No argument provided!")
             exit(1)
         except KeyboardInterrupt:
             print("[x] KeyboardInterrupt occurred.")
+            [thread.join() for thread in totalthreads]
+            notificationThread.join()
             exit(1)
 
 

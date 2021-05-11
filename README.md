@@ -1,6 +1,7 @@
 # takeover.py
 This small script tries to detect subdomain takeovers from a list of domains. Fingerprints are taken from https://github.com/EdOverflow/can-i-take-over-xyz.
 
+[![Twitter](https://img.shields.io/twitter/url?style=social)](https://twitter.com/intent/tweet?text=Wow:&url=https%3A%2F%2Fgithub.com%2F0xcrypto%2Ftakeover)
 
 ## Installation
 
@@ -17,7 +18,7 @@ takeover blog.example.com
 Using with other tools:
 
 ```
-subfinder -d "example.com" | takeover
+subfinder -d "example.com" -silent | takeover
 ```
 
 Using in python:
@@ -45,7 +46,7 @@ asyncio.run(takeover(config).checkHost(subdomains))
 * If CNAME found, matches fingerprints in the body.
 
 ## Note
-* As I use discord a lot, this script is programmed to notify using discord webhooks. So you will need to have a discord server and create a webhook to use in it. 
+* The output is a lot verbose so it is recommended to use a discord webhook to get notified. I am planning to change it in a major update. 
 * If you need some extra features, feel free to submit a new issue on GitHub.
 
 ## License
