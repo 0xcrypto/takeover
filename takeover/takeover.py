@@ -100,7 +100,7 @@ class takeover:
             exit(1)
         except KeyboardInterrupt:
             print("[x] KeyboardInterrupt occurred.")
-            [thread.join() for thread in totalthreads]
+            [thread.join() for thread in self.allthreads]
             exit(1)
 
 
