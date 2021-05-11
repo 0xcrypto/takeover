@@ -16,8 +16,13 @@ class takeover:
         self.totalthreads = 0
         self.allthreads = []
         self.messages = []
+        self.found = set()
 
     def subDomainTakeOver(self, domain, cnames, fingerprint):
+        key = "|".join([domain, fingerprint['service']])
+        if key in self.found:
+            return
+
         for rdata in cnames:
             for cname in fingerprint['cname']:
                 if(cname and cname in str(rdata.target)):
@@ -31,35 +36,36 @@ class takeover:
                         return 
                     if(fingerprint['fingerprint'] in request.text):
                         print("[+] %s matched for domain %s" % (fingerprint['service'], domain))
-                        self.messages.append("""
-                            Hey%s,\n%s is %s to subdomain takeover on %s. Fingerprint is `%s`
-                        """ % (('<@' + self.discord_user_id + '>') if self.discord_user_id else "", website, fingerprint['status'].lower().strip(), fingerprint['service'], fingerprint['fingerprint']))
+                        self.found.add(key)
+                        self.messages.append([website, fingerprint['status'].lower().strip(), fingerprint['service'], fingerprint['fingerprint']])
         self.totalthreads -= 1
 
+        
     def inform(self):
-        if(self.discord):
-            while True:
-                try:
-                    message = self.messages.pop()
-                    self.discord.send(message)
-                except:
-                    continue
+        if(self.discord and len(self.messages)):
+            message = "Hey %s, Subdomain takeovers here:\n```%s```" % (
+                ('<@' + self.discord_user_id + '>') if self.discord_user_id else "",
+                "\n".join([lambda message: ": ".join(message) for message in self.messages])
+            )
+            self.messages = []
+            self.discord.send(message)
 
 
     async def checkHosts(self, args=[]):
         self.recheck = []
-        notificationThread = threading.Thread(target=self.inform)
-        notificationThread.start()
+        
+        args = (sys.argv[1:] if (not args) else args)
+        if (not args):
+            print("Reading from PIPE... Raise KeyboardInterrupt to stop it.")
+            args = sys.stdin
+
+        if (type(args) != enumerate):
+            args = enumerate(args)
 
         try:
-            if(not len(args)):
-                args = sys.argv
-                args.pop(0)
-            if(not len(args)):
-                print("Reading from PIPE... Raise KeyboardInterrupt to stop it.")
-                args = list(set(sys.stdin))
+            for (index, domain) in args:
+                self.inform()
 
-            for domain in args:
                 while self.totalthreads > 80:
                     print("[!] Threads exceeding: %s Threads" % self.totalthreads)
                     time.sleep(1)
@@ -71,7 +77,7 @@ class takeover:
                     cname = dns.resolver.query(validdomain, 'CNAME')
                     threads = [threading.Thread(target=self.subDomainTakeOver, args=(validdomain, cname, fingerprint)) for fingerprint in self.fingerprints]
                     [thread.start() for thread in threads]
-                    self.allthreads.append(threads)
+                    self.allthreads + threads
                     self.totalthreads += len(threads)
 
                 except NoNameservers:
@@ -84,7 +90,7 @@ class takeover:
                 except NXDOMAIN:
                     print("[x] DNS NXDOMAIN: %s"  % validdomain)
 
-            [thread.join() for thread in totalthreads]
+            [thread.join() for thread in self.allthreads]
 
             if(len(self.recheck)):
                 await self.checkHosts(self.recheck)
@@ -95,7 +101,6 @@ class takeover:
         except KeyboardInterrupt:
             print("[x] KeyboardInterrupt occurred.")
             [thread.join() for thread in totalthreads]
-            notificationThread.join()
             exit(1)
 
 
@@ -141,7 +146,6 @@ def main():
             exit(1)
 
     asyncio.run(takeover(config).checkHosts())
-
 
 if __name__ == '__main__':
     main()

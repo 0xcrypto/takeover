@@ -27,13 +27,15 @@ Using with other tools:
 
     subfinder -d "example.com" -silent | takeover
 
-Using in python:
+Automation:
+
+Creating a automated scan server:
 
 .. code:: python
 
-    import json, asyncio
+    import json, asyncio, pickle, os
     from pathlib import Path
-    from takeover import takeover
+    from takeover.takeover import takeover
 
     home = str(Path.home())
 
@@ -43,9 +45,37 @@ Using in python:
     # Do not forget to replace pointer to fingerprints with the valid data. See ~/.config/takeover/fingerprints.json for structure
     config['fingerprints'] = json.load(open(home + "/.config/takeover/fingerprints.json"))
 
-    subdomains = ["blog.example.com", "services.example.com"]
+    async def loop():
+        print("Starting infinite loop:")
+        while True:
+                takeoverObject = takeover(config)
+                try:
+                    takeoverObject.found = pickle.load(open("found.pickle", 'rb'))
+                except FileNotFoundError:
+                    print("No old data found.", end="\r")
+                
+                try:
+                    with open("subdomains.txt") as subdomainFile:
+                        subdomains = enumerate(subdomainFile)
+                        await takeoverObject.checkHosts(subdomains)
+                except FileNotFoundError:
+                    continue
 
-    asyncio.run(takeover(config).checkHost(subdomains))
+                with open("found.pickle", 'wb') as foundFile:
+                    pickle.dump(takeoverObject.found, foundFile)
+
+                os.remove("subdomains.txt")
+                print("Enumerated all targets in subdomains.txt for takeover")
+
+    asyncio.run(loop())
+
+The above automation script can be used along with any subdomain enumeration tool:
+
+::
+
+    subfinder -d example.com -o subdomains.txt
+
+and the running infinite loop will automatically detect `subdomains.txt` file and start looking for takeovers. After completion, it also deletes the subdomains.txt so that you can add new targets. Obviously, you can tweak it however you want.
 
 How it Works
 ------------
