@@ -15,7 +15,7 @@ class takeover:
         
         self.fingerprints = configuration['fingerprints']
         self.totalthreads = 0
-        self.allthreads = []
+        self.allthreads = self.recheck = []
         self.messages = []
         self.found = set()
 
@@ -70,7 +70,7 @@ class takeover:
                     time.sleep(1)
 
                 if (domain.startswith('http://') or domain.startswith('https://')):
-                    validdomain = domain
+                    validdomain = (urlparse(domain).netloc).strip()
                 else:
                     validdomain = (urlparse('http://' + domain).netloc).strip()
 
