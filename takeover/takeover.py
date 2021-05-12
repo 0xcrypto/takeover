@@ -11,8 +11,9 @@ home = str(Path.home())
 class takeover:
     def __init__(self, configuration):
         self.discord = Webhook.from_url(configuration['discord_webhook'], adapter=RequestsWebhookAdapter()) if configuration['discord_webhook'] else False
-        self.fingerprints = configuration['fingerprints']
         self.discord_user_id = configuration['user_id'] if('user_id' in configuration) else ""
+        
+        self.fingerprints = configuration['fingerprints']
         self.totalthreads = 0
         self.allthreads = []
         self.messages = []
@@ -51,9 +52,7 @@ class takeover:
             self.discord.send(message)
 
 
-    async def checkHosts(self, args=[]):
-        self.recheck = []
-        
+    async def checkHosts(self, args=[]):       
         args = (sys.argv[1:] if (not args) else args)
         if (not args):
             print("Reading from PIPE... Raise KeyboardInterrupt to stop it.")
@@ -83,7 +82,7 @@ class takeover:
                 except NoNameservers:
                     print("[x] DNS No No nameservers: %s" % validdomain)
                 except Timeout:
-                    # self.recheck.append(validdomain)
+                    self.recheck.append(validdomain)
                     print("[x] DNS Timeout: %s"  % validdomain)
                 except NoAnswer:
                     print("[x] DNS No Answer for CNAME: %s"  % validdomain)
@@ -91,9 +90,6 @@ class takeover:
                     print("[x] DNS NXDOMAIN: %s"  % validdomain)
 
             [thread.join() for thread in self.allthreads]
-
-            # if(len(self.recheck)):
-            #     await self.checkHosts(self.recheck)
 
         except IndexError:
             print("[x] No argument provided!")
