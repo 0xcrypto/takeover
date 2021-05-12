@@ -6,7 +6,7 @@ def read(fname):
 
 setup(
     name = "takeover.py",
-    version = "0.0.7",
+    version = "0.0.8",
     author = "Vikrant Singh Chauhan",
     author_email = "vi@hackberry.xyz",
     description = ("This small script tries to detect subdomain takeovers from a list of domains. Fingerprints are taken from https://github.com/EdOverflow/can-i-take-over-xyz."),
