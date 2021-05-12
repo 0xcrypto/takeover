@@ -69,9 +69,11 @@ class takeover:
                     print("[!] Threads exceeding: %s Threads" % self.totalthreads)
                     time.sleep(1)
 
-                validdomain = domain
-                if not(domain.startswith('http://') or domain.startswith('https://')):
+                if (domain.startswith('http://') or domain.startswith('https://')):
+                    validdomain = domain
+                else:
                     validdomain = (urlparse('http://' + domain).netloc).strip()
+
                 try:
                     cname = dns.resolver.query(validdomain, 'CNAME')
                     threads = [threading.Thread(target=self.subDomainTakeOver, args=(validdomain, cname, fingerprint)) for fingerprint in self.fingerprints]
