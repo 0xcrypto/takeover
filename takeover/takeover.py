@@ -91,7 +91,7 @@ class takeover:
                 except NXDOMAIN:
                     print("[x] DNS NXDOMAIN: %s"  % validdomain)
 
-            [thread.join() for thread in self.allthreads]
+            # [thread.join() for thread in self.allthreads]
 
         except IndexError:
             print("[x] No argument provided!")
