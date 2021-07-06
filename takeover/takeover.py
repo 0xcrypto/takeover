@@ -63,8 +63,6 @@ class takeover:
 
         try:
             for (index, domain) in args:
-                self.inform()
-
                 while self.totalthreads > 80:
                     print("[!] Threads exceeding: %s Threads" % self.totalthreads)
                     time.sleep(1)
@@ -90,6 +88,8 @@ class takeover:
                     print("[x] DNS No Answer for CNAME: %s"  % validdomain)
                 except NXDOMAIN:
                     print("[x] DNS NXDOMAIN: %s"  % validdomain)
+
+                self.inform()
 
             # [thread.join() for thread in self.allthreads]
 
