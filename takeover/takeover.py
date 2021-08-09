@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import asyncio, requests, sys, os, dns.resolver, json, threading, time
+import asyncio, requests, sys, dns , os, json, threading, time
 from discord import Webhook, RequestsWebhookAdapter
 from urllib.parse import urlparse
 from dns.resolver import Resolver, NXDOMAIN, NoNameservers, Timeout, NoAnswer
@@ -11,14 +11,29 @@ home = str(Path.home())
 class takeover:
     def __init__(self, configuration):
         self.discord = Webhook.from_url(configuration['discord_webhook'], adapter=RequestsWebhookAdapter()) if configuration['discord_webhook'] else False
+        self.telegram_notification = True if configuration['telegram_notification'] and configuration['telegram_notification_chatid'] else False
         self.discord_user_id = configuration['user_id'] if('user_id' in configuration) else ""
-        
+
         self.fingerprints = configuration['fingerprints']
         self.totalthreads = 0
         self.allthreads = self.recheck = []
         self.messages = []
         self.found = set()
+        self.init_configuration = configuration
+        
 
+    def configuration_telegram_notification(self):
+        CONFIG_Credentials = {
+                "API_TOKEN" :   self.init_configuration['telegram_notification'] , 
+                "CHAT_ID"   :   self.init_configuration['telegram_notification_chatid']
+           } 
+        CONFIG_API = {
+                "TELEGRAM_API"      :    "https://api.telegram.org/bot",
+                "PATH_TELEGRAM_API" :    "/sendMessage?chat_id={0}".format( int(CONFIG_Credentials["CHAT_ID"]) ),
+            }
+        return CONFIG_API , CONFIG_Credentials
+
+        
     def subDomainTakeOver(self, domain, cnames, fingerprint):
         key = "|".join([domain, fingerprint['service']])
         if key in self.found:
@@ -51,6 +66,14 @@ class takeover:
             self.messages = []
             self.discord.send(message)
 
+        if self.telegram_notification and len(self.messages) > 0 : 
+           get_telegram_api = self.configuration_telegram_notification()[0]["TELEGRAM_API"]
+           get_telegram_api_path = self.configuration_telegram_notification()[0]["PATH_TELEGRAM_API"]
+           get_telegram_api_token = self.configuration_telegram_notification()[1]["API_TOKEN"]
+           get_chat_id = self.configuration_telegram_notification()[1]["CHAT_ID"]  
+           message_context = ''' Hey Subdomain takeovers here : \n  :{0} '''.format("\n".join([ message for message in self.messages]))
+           self.messages = []
+           telegram_send = requests.get( get_telegram_api + get_telegram_api_token  + str(get_telegram_api_path) + "&text=" + str(message_context) )
 
     async def checkHosts(self, args=[]):       
         args = (sys.argv[1:] if (not args) else args)
@@ -112,6 +135,8 @@ def main():
             config = {
                 "fingerprints": input("Enter Path/URL for fingerprints.json. Leave blank to use default: ") or "https://gist.githubusercontent.com/0xcrypto/c0344960476193d8af7dbb310cc04958/raw/06ed5533702fc56b2e126eb600f8f8ce2967961d/sdto.json",
                 "discord_webhook": input("Enter Discord webhook. Leave blank if you do not wish to use discord: "),
+                "telegram_notification": input("Enter Your telegram_token. Leave blank if you do not wish to use telegram_notification : "),
+                "telegram_notification_chatid": input("Enter Your telegram_chatid. Leave blank if you do not wish to use telegram_notification_chat_id : "),
                 "user_id": input("Enter your Discord User ID to get mentioned in the notification. Leave blank for no mention: ")
             }
             print("Your configuration is: ")
@@ -137,6 +162,8 @@ def main():
             config = {
                 "discord_webhook": config['discord_webhook'],
                 "fingerprints": fingerprints,
+                "telegram_notification": config['telegram_notification'] ,
+                "telegram_notification_chatid": config['telegram_notification_chatid'] ,
                 "user_id": config['user_id'],
             }
         else:
