@@ -1,176 +1,159 @@
-#!/usr/bin/env python3
+import click, requests, dns.resolver, json, time, sys, os
+from concurrent import futures
+from selenium import webdriver
+from selenium.common.exceptions import WebDriverException
 
-import asyncio, requests, sys, dns , os, json, threading, time
-from discord import Webhook, RequestsWebhookAdapter
-from urllib.parse import urlparse
-from dns.resolver import Resolver, NXDOMAIN, NoNameservers, Timeout, NoAnswer
-from pathlib import Path
+class UnknownService(Exception):
+    def __init__(self, message="Service is invalid. Make sure the service is compliant with https://github.com/EdOverflow/can-i-take-over-xyz."):
+        super().__init__(self.message)
 
-home = str(Path.home())
+class Config:
+    def __init__(self, configFile="./config.json"):
+        try:
+            if(configFile.startswith("http://") or configFile.startswith("https://")):
+                self.config = json.loads(requests.get(configFile).text)
+            else:
+                with open(configFile, 'r') as f:
+                    self.config = json.load(f)
+        except Exception as e:
+            print("Failed to load config file! Exitting...", file=sys.stderr)
+            print(e, file=sys.stderr)
+            exit(1)
 
-class takeover:
-    def __init__(self, configuration):
-        self.discord = Webhook.from_url(configuration['discord_webhook'], adapter=RequestsWebhookAdapter()) if configuration['discord_webhook'] else False
-        self.telegram_notification = True if configuration['telegram_notification'] and configuration['telegram_notification_chatid'] else False
-        self.discord_user_id = configuration['user_id'] if('user_id' in configuration) else ""
+    def services(self):
+        return self.config["fingerprints"]
+    
+    def channel(self, name):
+        if(name == ""):
+            return False
+        for channel in self.config["config"]["channels"]:
+            if channel["name"] == name:
+                return channel
 
-        self.fingerprints = configuration['fingerprints']
-        self.totalthreads = 0
-        self.allthreads = self.recheck = []
-        self.messages = []
-        self.found = set()
-        self.init_configuration = configuration
+class Notifier:
+    def __init__(self, channel):
+        self.channel = channel
+    
+    def send(self, target, service):
+        self.headers = self.channel["headers"]
+        for header in self.headers.keys():
+            self.headers[header] = self.headers[header].format(GITHUB_TOKEN="GITHUB_TOKEN")
         
-
-    def configuration_telegram_notification(self):
-        CONFIG_Credentials = {
-                "API_TOKEN" :   self.init_configuration['telegram_notification'] , 
-                "CHAT_ID"   :   self.init_configuration['telegram_notification_chatid']
-           } 
-        CONFIG_API = {
-                "TELEGRAM_API"      :    "https://api.telegram.org/bot",
-                "PATH_TELEGRAM_API" :    "/sendMessage?chat_id={0}".format( int(CONFIG_Credentials["CHAT_ID"]) ),
-            }
-        return CONFIG_API , CONFIG_Credentials
-
+        self.webhook = self.channel["webhook"].format(
+            WEBHOOK_URL=os.getenv("WEBHOOK_URL"),
+            TELEGRAM_BOT_TOKEN=os.getenv("BOT_TOKEN"),
+            GITHUB_USER=os.getenv("GITHUB_USER"),
+            GITHUB_REPOSITORY=os.getenv("GITHUB_REPOSITORY")
+        )
         
-    def subDomainTakeOver(self, domain, cnames, fingerprint):
-        key = "|".join([domain, fingerprint['service']])
-        if key in self.found:
-            return
-
-        for rdata in cnames:
-            for cname in fingerprint['cname']:
-                if(cname and cname in str(rdata.target)):
-                    website = 'http://' + domain
-                    print("[.] Sending HTTP Request: %s" % domain)
-                    try:
-                        request = requests.get(website)
-                    except requests.exceptions.ConnectionError:
-                        print("[x] Connection Failed: %s" % domain)
-                        self.recheck.append(domain)
-                        return 
-                    if(fingerprint['fingerprint'] in request.text):
-                        print("[+] %s matched for domain %s" % (fingerprint['service'], domain))
-                        self.found.add(key)
-                        self.messages.append([website, fingerprint['status'].lower().strip(), fingerprint['service'], fingerprint['fingerprint']])
-        self.totalthreads -= 1
-
-        
-    def inform(self):
-        if(self.discord and len(self.messages)):
-            message = "Hey %s, Subdomain takeovers here:\n```%s```" % (
-                ('<@' + self.discord_user_id + '>') if self.discord_user_id else "",
-                "\n".join([": ".join(message) for message in self.messages])
+        message = ("{" + self.channel["body"] + "}").format(
+            TELEGRAM_CHAT_ID=os.getenv("TELEGRAM_CHAT_ID"),
+            MESSAGE=self.channel["message_template"].format(
+                TARGET=target.target,
+                STATUS=service["status"],
+                SERVICE=service["service"],
+                DOCUMENTATION=service["documentation"]
             )
-            self.messages = []
-            self.discord.send(message)
-
-        if self.telegram_notification and len(self.messages) > 0 : 
-           get_telegram_api = self.configuration_telegram_notification()[0]["TELEGRAM_API"]
-           get_telegram_api_path = self.configuration_telegram_notification()[0]["PATH_TELEGRAM_API"]
-           get_telegram_api_token = self.configuration_telegram_notification()[1]["API_TOKEN"]
-           get_chat_id = self.configuration_telegram_notification()[1]["CHAT_ID"]  
-           message_context = ''' Hey Subdomain takeovers here : \n  :{0} '''.format("\n".join([ message for message in self.messages]))
-           self.messages = []
-           telegram_send = requests.get( get_telegram_api + get_telegram_api_token  + str(get_telegram_api_path) + "&text=" + str(message_context) )
-
-    async def checkHosts(self, args=[]):       
-        args = (sys.argv[1:] if (not args) else args)
-        if (not args):
-            print("Reading from PIPE... Raise KeyboardInterrupt to stop it.")
-            args = sys.stdin
-
-        if (type(args) != enumerate):
-            args = enumerate(args)
+        )
 
         try:
-            for (index, domain) in args:
-                while self.totalthreads > 80:
-                    print("[!] Threads exceeding: %s Threads" % self.totalthreads)
-                    time.sleep(1)
+            print(requests.post(self.webhook, data=message, headers=self.headers).text)
+            print("Notified %s" % self.channel["name"], file=sys.stderr)
+        except Exception as e:
+            print("Failed to notify %s" % self.channel["name"], file=sys.stderr)
+            print(e)
 
-                if (domain.startswith('http://') or domain.startswith('https://')):
-                    validdomain = (urlparse(domain).netloc).strip()
+class Target:
+    def __init__(self, domain, driver = "requests", browser = None):
+        self.target = domain
+        self.cnames = None
+        self.html = None
+        self.driver = driver
+        self.browser = webdrivers[driver]["driver"]() if browser == None else browser
+        self.driver = "chrome" if driver == None else driver      
+    
+    def check(self, service):
+        try:
+            if(service["status"] in ["Vulnerable", "Edge case"]):
+                if(service["nxdomain"]):
+                    self.resolved = dns.resolver.resolve(self.target) if self.cnames == None else self.cnames                  
+                    for resolved_host in self.resolved:
+                        if(str(resolved_host) in service["cname"]):
+                            return service["status"]
                 else:
-                    validdomain = (urlparse('http://' + domain).netloc).strip()
+                    if self.html == None:
+                        response = self.browser.get("http://" + self.target)
+                        time.sleep(2)
+                        self.html = getattr(response, webdrivers[self.driver]["content_attribute"])
 
-                try:
-                    cname = dns.resolver.query(validdomain, 'CNAME')
-                    threads = [threading.Thread(target=self.subDomainTakeOver, args=(validdomain, cname, fingerprint)) for fingerprint in self.fingerprints]
-                    [thread.start() for thread in threads]
-                    self.allthreads + threads
-                    self.totalthreads += len(threads)
+                    if(service["fingerprint"] in self.html):
+                        return service["status"]
+        except KeyError:
+            raise UnknownService
 
-                except NoNameservers:
-                    print("[x] DNS No No nameservers: %s" % validdomain)
-                except Timeout:
-                    self.recheck.append(validdomain)
-                    print("[x] DNS Timeout: %s"  % validdomain)
-                except NoAnswer:
-                    print("[x] DNS No Answer for CNAME: %s"  % validdomain)
-                except NXDOMAIN:
-                    print("[x] DNS NXDOMAIN: %s"  % validdomain)
+        return "Not vulnerable"
+        
 
-                self.inform()
+webdrivers = {
+    "chrome": {
+        "driver": webdriver.Chrome,
+        "content_attribute": "page_source",
+    },
+    "firefox": {
+        "driver": webdriver.Firefox,
+        "content_attribute": "page_source",
+    },
+    "requests": {
+        "driver": lambda: requests,
+        "content_attribute": "text",
+    }
+}
 
-            # [thread.join() for thread in self.allthreads]
-
-        except IndexError:
-            print("[x] No argument provided!")
-            exit(1)
-        except KeyboardInterrupt:
-            print("[x] KeyboardInterrupt occurred.")
-            [thread.join() for thread in self.allthreads]
-            exit(1)
-
-
-def main():
+def check(domain, services, channel):
     try:
-        config = json.load(open(home + "/.config/takeover/config.json"))
-        config['fingerprints'] = json.load(open(home + "/.config/takeover/fingerprints.json"))
-        config['user_id'] = config['user_id'] if 'user_id' in config else ""
-    except FileNotFoundError:
-        if('yes' == input("Takeover is not configured! To continue, you need to configure it. (type yes to continue): ")):
-            config = {
-                "fingerprints": input("Enter Path/URL for fingerprints.json. Leave blank to use default: ") or "https://gist.githubusercontent.com/0xcrypto/c0344960476193d8af7dbb310cc04958/raw/06ed5533702fc56b2e126eb600f8f8ce2967961d/sdto.json",
-                "discord_webhook": input("Enter Discord webhook. Leave blank if you do not wish to use discord: "),
-                "telegram_notification": input("Enter Your telegram_token. Leave blank if you do not wish to use telegram_notification : "),
-                "telegram_notification_chatid": input("Enter Your telegram_chatid. Leave blank if you do not wish to use telegram_notification_chat_id : "),
-                "user_id": input("Enter your Discord User ID to get mentioned in the notification. Leave blank for no mention: ")
-            }
-            print("Your configuration is: ")
-            print(json.dumps(config, sort_keys=True, indent=4))
+        target = Target(domain)
+        result = False
 
-            if(config['fingerprints'].startswith('http://') or config['fingerprints'].startswith('https://')):
-                fingerprints = json.loads(requests.get(config['fingerprints']).text)
-            else:
-                fingerprints = json.load(open(config['fingerprints']))
+        for service in services:
+            result = target.check(service)
+            print("[%s] %s: %s" % (domain, service["service"].strip(), result), file=sys.stderr)
+            
+            if(channel):
+                if result in channel["report"]:
+                    notify = Notifier(channel)
+                    notify.send(target, service)
+        
+    except Exception as e:
+        print("%s" % e.__repr__(), file=sys.stderr)
 
-            if('yes' == input("Would you like to save this? (yes to save the configuration, leave blank to use it temporarily): ")):
-                if not os.path.exists(home + '/.config/takeover'):
-                    os.makedirs(home + "/.config/takeover")
-               
-                with open(home + "/.config/takeover/fingerprints.json", 'w') as fingerprintFile:
-                    json.dump(fingerprints, fingerprintFile)
+# Commands
+@click.command()
+@click.argument('subdomains', type=click.File('r'))
+@click.option('--max-threads', default=10, help='Maximum number of threads to use.')
+@click.option('--config', default="", help='Location of config file. Can also be a URL')
+@click.option('--services', default="", help='Location of fingerprints file. Can also be a URL. If blank, fingerprints from config file will be used.')
+@click.option('--driver', default="requests", type=click.Choice(['chrome', 'firefox', 'requests']), help='Driver to use to fetch html content. Default: requests.')
+@click.option('--notify', default="", type=click.Choice(['', 'Discord', 'Telegram', 'Slack', 'GitHub Issue']), help='Location of config file. Can also be a URL')
+def main(subdomains, max_threads, config, services, driver, notify):
+    """
+    This command accepts a list of domain names and checks for possible takeovers.
 
-                with open(home + "/.config/takeover/config.json", 'w') as configFile:
-                    json.dump(config, configFile)
-
-                print("Configuration file updated successfully!")
-
-            config = {
-                "discord_webhook": config['discord_webhook'],
-                "fingerprints": fingerprints,
-                "telegram_notification": config['telegram_notification'] ,
-                "telegram_notification_chatid": config['telegram_notification_chatid'] ,
-                "user_id": config['user_id'],
-            }
-        else:
-            print("Without fingerprints, takeover cannot detect subdomain takeovers!")
-            exit(1)
-
-    asyncio.run(takeover(config).checkHosts())
-
-if __name__ == '__main__':
-    main()
+    :param subdomains: A file-like object containing a list of domain names, one per line.
+    :param max_threads: The maximum number of threads to use for checking the domains.
+    """
+    config = Config() if config == "" else config
+    services = json.loads(requests.get(services).text) if services != "" else config.services()
+    
+    print("Found fingerprints: %s" % len(services), file=sys.stderr)
+    
+    try:
+        driver = webdrivers[driver]["driver"]()
+    except (KeyError, WebDriverException) as e:
+        print("Browser not found, defaulting to requests module...", file=sys.stderr)
+        print(e, file=sys.stderr)
+        driver = webdrivers["requests"]["driver"]()
+    
+    max_threads = max_threads if max_threads > 0 else 1
+    jobs = []
+    with futures.ThreadPoolExecutor(max_workers=max_threads) as e:
+        e.map(lambda domain: check(domain.strip(), services, config.channel(notify)), subdomains)

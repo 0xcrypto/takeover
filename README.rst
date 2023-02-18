@@ -1,8 +1,10 @@
+.. _takeoverpy:
+
 takeover.py
 ===========
 
-This small script tries to detect subdomain takeovers from a list of
-domains. Fingerprints are taken from
+A script to test for subdomain takeovers from a list of domains.
+Fingerprints are taken from
 https://github.com/EdOverflow/can-i-take-over-xyz.
 
 |Twitter|
@@ -12,85 +14,52 @@ Installation
 
 ::
 
-    pip install takeover.py
+   pip install takeover.py
+
+After installation, make sure to configure the config.json file. You can
+also copy it from the github repository and use with ``--config`` flag.
 
 Usage
 -----
 
-::
-
-    takeover blog.example.com
-
-Using with other tools:
+A single target
 
 ::
 
-    subfinder -d "example.com" -silent | takeover
+   echo blog.example.com | takeover -
 
-Automation:
+Multiple Targets:
 
-Creating a automated scan server:
+.. code:: bash
 
-.. code:: python
+   subfinder -d "example.com" -silent | takeover -
 
-    import json, asyncio, pickle, os
-    from pathlib import Path
-    from takeover.takeover import takeover
+   # or
+   subfinder -d "example.com" -silent | takeover /dev/stdin
 
-    home = str(Path.home())
+Notifications:
 
-    # config is an dictionary. See ~/.config/takeover/config.json for structure
-    config = json.load(open(home + "/.config/takeover/config.json"))
+.. code:: bash
 
-    # Do not forget to replace pointer to fingerprints with the valid data. See ~/.config/takeover/fingerprints.json for structure
-    config['fingerprints'] = json.load(open(home + "/.config/takeover/fingerprints.json"))
-
-    async def loop():
-        print("Starting infinite loop:")
-        while True:
-                takeoverObject = takeover(config)
-                try:
-                    takeoverObject.found = pickle.load(open("found.pickle", 'rb'))
-                except FileNotFoundError:
-                    print("No old data found.", end="\r")
-                
-                try:
-                    with open("subdomains.txt") as subdomainFile:
-                        subdomains = enumerate(subdomainFile)
-                        await takeoverObject.checkHosts(subdomains)
-                except FileNotFoundError:
-                    continue
-
-                with open("found.pickle", 'wb') as foundFile:
-                    pickle.dump(takeoverObject.found, foundFile)
-
-                os.remove("subdomains.txt")
-                print("Enumerated all targets in subdomains.txt for takeover")
-
-    asyncio.run(loop())
-
-The above automation script can be used along with any subdomain enumeration tool:
-
-::
-
-    subfinder -d example.com -o subdomains.txt
-
-and the running infinite loop will automatically detect `subdomains.txt` file and start looking for takeovers. After completion, it also deletes the subdomains.txt so that you can add new targets. Obviously, you can tweak it however you want.
-
-How it Works
-------------
-
--  Matches CNAME against takeover-able services
--  If CNAME found, matches fingerprints in the body.
+   subfinder -d "example.com" -silent | takeover - --notify Discord
 
 Note
 ----
 
--  The output is a lot verbose so it is recommended to use a discord
-   webhook to get notified. I am planning to change it in a major
-   update.
--  If you need some extra features, feel free to submit a new issue on
-   GitHub.
+-  The output is a lot verbose so it is recommended to use a third party
+   webhook service like discord, slack to get notified.
+-  Some fingerprints are not well formatted to be matched. For example,
+   in WordPress, the fingerprint is
+   ``Do you want to register *.wordpress.com?``, however this is not an
+   exact match and correct fingerprint should be
+   ``Do you want to register <em>example.wordpress.com</em>?``. To fix
+   this, you can give your own file for fingerprints with either in
+   ``config.json`` or with ``--services`` flag.
+
+Contribute
+----------
+
+-  Feel free to submit a PR or new issues on GitHub.
 
 License
 -------
@@ -100,11 +69,11 @@ License
 Disclaimer
 ----------
 
-I make guns, I sell guns, I give away guns but I take no responsibility
-of who dies with the guns.
-
-*Legally speaking, What you do with this has nothing to do with me. I am
-not responsible for your actions.*
+An excerpt from the License: "IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE."
 
 .. |Twitter| image:: https://img.shields.io/twitter/url?style=social&url=https%3A%2F%2Fgithub.com%2F0xcrypto%2Ftakeover
    :target: https://twitter.com/intent/tweet?text=Wow:&url=https%3A%2F%2Fgithub.com%2F0xcrypto%2Ftakeover
